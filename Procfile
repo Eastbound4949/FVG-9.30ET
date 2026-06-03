@@ -1,1 +1,1 @@
-web: streamlit run main.py --server.port $PORT --server.headless true --server.enableCORS false
+web: bash start.sh

@@ -27,11 +27,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# ── Start scheduler once per process ─────────────────────────────────────────
-if "scheduler_started" not in st.session_state:
-    trader.init_db()
-    sched_mod.start()
-    st.session_state["scheduler_started"] = True
+trader.init_db()
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.title("ORB 9:30 ET Paper Trading Bot")
@@ -161,7 +157,7 @@ else:
 
 # ── Event log ─────────────────────────────────────────────────────────────────
 st.subheader("Bot Log")
-events = sched_mod.get_cached_events()
+events = trader.get_events(30)
 if events:
     for ev in events[:30]:
         colour = {"TRADE": "#00e676", "ERROR": "#ff5252"}.get(ev["level"], "#aaaaaa")

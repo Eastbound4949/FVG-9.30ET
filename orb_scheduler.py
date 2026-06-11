@@ -19,7 +19,8 @@ from apscheduler.triggers.cron import CronTrigger
 import orb_trader as trader
 import orb_strategy as strat
 import orb_notify as notify
-from orb_config import SYMBOL, CAPITAL_START
+import signal_server
+from orb_config import SYMBOL, CAPITAL_START, LIVE_TRADING_ENABLED, BRIDGE_SYMBOL
 
 log = logging.getLogger("scheduler")
 logging.basicConfig(level=logging.INFO,
@@ -44,6 +45,34 @@ def _log(msg: str, level: str = "INFO"):
     trader.log_event(msg, level)
     _cache_event(msg, level)
     log.info(msg)
+
+
+def _send_live_signal(setup: dict, pos: dict):
+    """Queue an entry signal for the MT5 EA to pick up via /signal poll.
+
+    Best-effort: paper balance/state tracking already happened in
+    trader.open_trade() — this just hands the EA the entry/SL/TP distances.
+    Lot sizing (risk%) is computed on the EA side from its own input, not here.
+    """
+    if not LIVE_TRADING_ENABLED:
+        return
+
+    sl_points = setup["sl_dist"]
+    tp_points = abs(setup["target"] - setup["entry"])
+
+    payload = {
+        "symbol": BRIDGE_SYMBOL,
+        "direction": "sell" if setup["direction"] == "short" else "buy",
+        "sl_points": round(sl_points, 4),
+        "tp_points": round(tp_points, 4),
+        "client_tag": f"orb-{setup['bar_time']}",
+    }
+    signal_server.push_signal(payload)
+    _log(
+        f"LIVE SIGNAL QUEUED: {payload['direction'].upper()} {payload['symbol']} "
+        f"SL {payload['sl_points']}pts / TP {payload['tp_points']}pts",
+        "TRADE",
+    )
 
 
 def job_run():
@@ -120,6 +149,7 @@ def job_run():
                 notify.trade_opened(pos)
                 _log(f"TRADE ENTERED: {setup['direction'].upper()} entry={setup['entry']:.2f} "
                      f"SL={setup['stop']:.2f} TP={setup['target']:.2f}", "TRADE")
+                _send_live_signal(setup, pos)
 
     except Exception as e:
         _log(f"job_run error: {e}", "ERROR")
@@ -149,6 +179,10 @@ def start() -> BackgroundScheduler:
                   id="daily_summary", replace_existing=True)
 
     sched.start()
+
+    # Always-on: binds Railway's $PORT so /health responds for the platform
+    # healthcheck (dashboard moved to a fixed local port, see start.sh).
+    signal_server.start_in_background()
 
     bal = trader.get_balance()
     notify.bot_started(SYMBOL, bal, CAPITAL_START)

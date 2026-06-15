@@ -24,4 +24,4 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "true"
 SIGNAL_SECRET        = os.getenv("SIGNAL_SECRET", "")
 SIGNAL_PORT          = int(os.getenv("PORT", os.getenv("SIGNAL_PORT", "8080")))
-BRIDGE_SYMBOL        = os.getenv("BRIDGE_SYMBOL", "SPY")   # broker symbol for the chart the EA runs on
+BRIDGE_SYMBOL        = os.getenv("BRIDGE_SYMBOL", "SP500")   # broker symbol for the chart the EA runs on

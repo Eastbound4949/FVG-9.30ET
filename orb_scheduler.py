@@ -75,6 +75,24 @@ def _send_live_signal(setup: dict, pos: dict):
     )
 
 
+def _send_heartbeat_signal():
+    """Queue a minimum-size open+close round trip on startup/redeploy so the
+    EA relay path (Railway -> WebRequest -> MT5 order) can be verified
+    end-to-end. The EA opens this at SYMBOL_VOLUME_MIN and closes it
+    immediately on receipt."""
+    payload = {
+        "symbol": BRIDGE_SYMBOL,
+        "direction": "buy",
+        "sl_points": 1.0,
+        "tp_points": 1.0,
+        "client_tag": "heartbeat",
+    }
+    signal_server.push_signal(payload)
+    _log(f"Startup heartbeat queued: open+close test trade on {BRIDGE_SYMBOL}", "INFO")
+    notify.send(f"<b>Startup Heartbeat</b>\nQueued open+close test trade on {BRIDGE_SYMBOL} "
+                f"(EA opens at min size then closes it immediately)")
+
+
 def job_run():
     """Main job — runs every 5 minutes. Drives the full ORB state machine."""
     try:
@@ -183,6 +201,9 @@ def start() -> BackgroundScheduler:
     # Always-on: binds Railway's $PORT so /health responds for the platform
     # healthcheck (dashboard moved to a fixed local port, see start.sh).
     signal_server.start_in_background()
+
+    if LIVE_TRADING_ENABLED:
+        _send_heartbeat_signal()
 
     bal = trader.get_balance()
     notify.bot_started(SYMBOL, bal, CAPITAL_START)

@@ -76,10 +76,21 @@ def _send_live_signal(setup: dict, pos: dict):
 
 
 def _send_heartbeat_signal():
-    """Queue a minimum-size open+close round trip on startup/redeploy so the
-    EA relay path (Railway -> WebRequest -> MT5 order) can be verified
-    end-to-end. The EA opens this at SYMBOL_VOLUME_MIN and closes it
-    immediately on receipt."""
+    """On startup/redeploy, record a zero-impact paper open+close on SYMBOL
+    (visible in the dashboard) AND queue a matching min-size open+close round
+    trip on BRIDGE_SYMBOL for the EA relay path (Railway -> WebRequest -> MT5
+    order) to be verified end-to-end. The EA opens this at SYMBOL_VOLUME_MIN
+    and closes it immediately on receipt."""
+    spy_price = None
+    try:
+        df = strat.fetch_today(SYMBOL)
+        bar = strat.get_latest_bar(df)
+        if bar:
+            spy_price = bar["close"]
+            trader.record_heartbeat_trade(SYMBOL, spy_price)
+    except Exception as e:
+        _log(f"Heartbeat paper trade on {SYMBOL} failed: {e}", "ERROR")
+
     payload = {
         "symbol": BRIDGE_SYMBOL,
         "direction": "buy",
@@ -89,7 +100,10 @@ def _send_heartbeat_signal():
     }
     signal_server.push_signal(payload)
     _log(f"Startup heartbeat queued: open+close test trade on {BRIDGE_SYMBOL}", "INFO")
-    notify.send(f"<b>Startup Heartbeat</b>\nQueued open+close test trade on {BRIDGE_SYMBOL} "
+
+    spy_line = f"Paper: {SYMBOL} open+close @ {spy_price:.2f}\n" if spy_price else ""
+    notify.send(f"<b>Startup Heartbeat</b>\n{spy_line}"
+                f"Live relay: queued open+close test trade on {BRIDGE_SYMBOL} "
                 f"(EA opens at min size then closes it immediately)")
 
 

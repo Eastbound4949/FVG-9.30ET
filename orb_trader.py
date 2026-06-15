@@ -229,6 +229,23 @@ def check_and_close(bar_high: float, bar_low: float) -> dict | None:
     return closed
 
 
+def record_heartbeat_trade(symbol: str, price: float) -> dict:
+    """Record a zero-impact open+close round trip on SYMBOL so the paper
+    dashboard shows a visible heartbeat alongside the live relay signal."""
+    now = utc_now()
+    bal = get_balance()
+    with _conn() as c:
+        c.execute("""
+            INSERT INTO trades
+              (symbol, direction, entry_time, entry_price, sl, tp, sl_dist, rr,
+               risk_amount, exit_time, exit_price, exit_reason, profit, balance)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (symbol, "long", now, price, price, price, 0, 0, 0,
+              now, price, "heartbeat", 0.0, bal))
+    log_event(f"HEARTBEAT TEST TRADE: {symbol} open+close @ {price:.2f} (no P&L impact)", "TRADE")
+    return {"symbol": symbol, "entry_price": price, "exit_price": price, "profit": 0.0}
+
+
 def close_eod(close_price: float) -> dict | None:
     """Close open trade at EOD market price."""
     pos = get_position()
@@ -301,7 +318,7 @@ def get_equity_log() -> list[dict]:
 
 
 def get_stats() -> dict:
-    trades = get_trades(10000)
+    trades = [t for t in get_trades(10000) if t["exit_reason"] != "heartbeat"]
     if not trades:
         return {"trades": 0, "wins": 0, "losses": 0,
                 "win_rate": 0, "pf": 0, "net": 0, "balance": get_balance()}

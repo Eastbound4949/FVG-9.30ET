@@ -9,7 +9,9 @@ Runs in a background thread inside the Railway worker, bound to $PORT.
 """
 
 import hmac
+import json
 import logging
+import sqlite3
 import threading
 
 from flask import Flask, jsonify, request
@@ -20,15 +22,41 @@ log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 _lock = threading.Lock()
-_pending: dict | None = None
+
+# SQLite-backed signal store so a Railway restart doesn't drop a queued signal.
+_DB = config.DB_PATH
+
+
+def _db():
+    c = sqlite3.connect(_DB, check_same_thread=False)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS pending_signal (
+            id      INTEGER PRIMARY KEY CHECK (id = 1),
+            payload TEXT
+        )
+    """)
+    return c
 
 
 def push_signal(payload: dict) -> None:
     """Queue a signal for the EA to pick up on its next poll."""
-    global _pending
     with _lock:
-        _pending = dict(payload)
+        with _db() as c:
+            c.execute(
+                "INSERT OR REPLACE INTO pending_signal (id, payload) VALUES (1, ?)",
+                (json.dumps(payload),),
+            )
     log.info(f"Signal queued for EA poll: {payload}")
+
+
+def _pop_signal() -> dict | None:
+    with _lock:
+        with _db() as c:
+            row = c.execute("SELECT payload FROM pending_signal WHERE id=1").fetchone()
+            if row is None:
+                return None
+            c.execute("DELETE FROM pending_signal WHERE id=1")
+            return json.loads(row[0])
 
 
 def _authorized(req) -> bool:
@@ -40,10 +68,7 @@ def _authorized(req) -> bool:
 def get_signal():
     if not _authorized(request):
         return jsonify({"error": "unauthorized"}), 401
-    global _pending
-    with _lock:
-        payload = _pending
-        _pending = None  # consume — one-shot delivery
+    payload = _pop_signal()
     return jsonify(payload or {})
 
 

@@ -25,3 +25,6 @@ LIVE_TRADING_ENABLED = os.getenv("LIVE_TRADING_ENABLED", "false").lower() == "tr
 SIGNAL_SECRET        = os.getenv("SIGNAL_SECRET", "")
 SIGNAL_PORT          = int(os.getenv("PORT", os.getenv("SIGNAL_PORT", "8080")))
 BRIDGE_SYMBOL        = os.getenv("BRIDGE_SYMBOL", "[SP500]")   # broker symbol for the chart the EA runs on
+# Scale SPY sl_dist/tp_dist to broker CFD price units.
+# SPY ≈ S&P500/10, so [SP500] needs ~10x. Set to 1.0 if BRIDGE_SYMBOL IS SPY.
+BRIDGE_SCALE         = float(os.getenv("BRIDGE_SCALE", "10.0"))

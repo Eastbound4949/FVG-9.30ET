@@ -20,7 +20,7 @@ import orb_trader as trader
 import orb_strategy as strat
 import orb_notify as notify
 import signal_server
-from orb_config import SYMBOL, CAPITAL_START, LIVE_TRADING_ENABLED, BRIDGE_SYMBOL
+from orb_config import SYMBOL, CAPITAL_START, LIVE_TRADING_ENABLED, BRIDGE_SYMBOL, BRIDGE_SCALE
 
 log = logging.getLogger("scheduler")
 logging.basicConfig(level=logging.INFO,
@@ -57,8 +57,8 @@ def _send_live_signal(setup: dict, pos: dict):
     if not LIVE_TRADING_ENABLED:
         return
 
-    sl_points = setup["sl_dist"]
-    tp_points = abs(setup["target"] - setup["entry"])
+    sl_points = setup["sl_dist"] * BRIDGE_SCALE
+    tp_points = abs(setup["target"] - setup["entry"]) * BRIDGE_SCALE
 
     payload = {
         "symbol": BRIDGE_SYMBOL,

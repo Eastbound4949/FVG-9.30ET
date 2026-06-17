@@ -72,6 +72,19 @@ def get_signal():
     return jsonify(payload or {})
 
 
+@app.route("/push", methods=["POST"])
+def push():
+    """External signal injection for testing. Requires same X-Secret auth."""
+    if not _authorized(request):
+        return jsonify({"error": "unauthorized"}), 401
+    body = request.get_json(silent=True) or {}
+    required = {"symbol", "direction", "sl_points", "tp_points"}
+    if not required.issubset(body.keys()):
+        return jsonify({"error": f"missing fields: {required - body.keys()}"}), 400
+    push_signal(body)
+    return jsonify({"queued": body})
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
